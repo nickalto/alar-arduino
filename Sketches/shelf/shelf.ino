@@ -30,9 +30,14 @@ void loop()
   Serial.println("Hello World");
 
   unsigned char currentCommand = 0;
+  unsigned char on = 0xff;
   
   while ( ble_available() ) {
+    
     currentCommand = ble_read();
+    if ( ble_available() ) {
+      on = ble_read() == 1;
+    }
   }
 
   if (Serial.available())
@@ -47,12 +52,12 @@ void loop()
   }
   
   switch (currentCommand) {
-    case 's':
-      Serial.println("Signal off");
+    case 'a':
+      Serial.println("Recieved a!");
       break;
       
-    case 'l':
-      Serial.println("Left");
+    case 'b':
+      Serial.println("Recieved b!");
       break;
 	
   }
