@@ -9,6 +9,8 @@
 String time;
 String gmtOffset;
 time_t currentTime = 0;
+int gmt = 0;
+int gmtOffsetSign = 1;
 boolean receivingTimeStamp = false;
 boolean receivingGMTOffset = false;
 
@@ -57,7 +59,7 @@ void ble_loop() {
   while ( ble_available() ) {
    
     currentCommand = ble_read();
-    boolean available = !handleTimeStamp(currentCommand);
+    boolean available = !handleTimeStamp(currentCommand) && !handleGMTOffset(currentCommand);
     
     if ( available && ble_available() ) {
       // Otherwise we are looking for an on/off value
@@ -152,6 +154,8 @@ boolean handleTimeStamp(unsigned char currentCommand ) {
 
     } else {
       //Otherwise it signals the transmission of a new timestamp - start receiving.
+       time = "";
+       currentTime = 0;
        receivingTimeStamp = !receivingTimeStamp;
     }
     
@@ -170,6 +174,63 @@ boolean handleTimeStamp(unsigned char currentCommand ) {
   return false;
 }
 
+
+//#########################################################################################
+// Handle Time Stamp
+// Checks to see if we are receiving a time stamp and uses it to set time. 
+// Sends TIMESET when completed.
+//#########################################################################################
+
+boolean handleGMTOffset(unsigned char currentCommand ) {
+  const char *timeChar;
+  //If a message starts with GxxG it is a GMT Offset
+
+  if( currentCommand == 'G' ) {
+    
+    if(receivingGMTOffset) {
+      //If we recieve a 'G' while receivingGMTOffset it signals the end of the message
+      receivingGMTOffset = !receivingGMTOffset;
+
+      // Now to convert that string to a time_t that we can actually use.
+      for(int i = 0; i < gmtOffset.length(); i++){   
+        char c = gmtOffset.charAt(i);   
+         if( c >= '0' && c <= '9'){   
+           gmt = (10 * gmt) + (c - '0') ; // convert digits to a number    
+         }
+      }
+      
+      gmt = gmt * gmtOffsetSign;
+      ble_send_data("GMTSET");
+
+    } else {
+      //Otherwise it signals the transmission of a new offset - start receiving.
+       gmt = 0;
+       gmtOffset = "";
+       receivingGMTOffset = !receivingGMTOffset;
+    }
+    
+    return true;
+    
+  } else if ( receivingGMTOffset ) {
+    
+    // If we are receiving store values in time string
+    if( currentCommand == '-' ) {
+      gmtOffsetSign = -1;
+    }
+    
+    if( currentCommand >= '0' && currentCommand <= '9') {   
+      timeChar = (const char*)&currentCommand;
+      gmtOffset += atoi(timeChar);
+    }
+    
+    return true;
+    
+  } 
+  
+  return false;
+}
+
+
 //#########################################################################################
 // Time Digital Clock Display
 // Debugging utility to print out the current time
@@ -177,7 +238,7 @@ boolean handleTimeStamp(unsigned char currentCommand ) {
 
 void time_digital_clock_display(){
   // digital clock display of the time
-  Serial.print(hour());
+  Serial.print(hour() + gmt);
   time_print_digits(minute());
   time_print_digits(second());
   Serial.print(" ");
